@@ -1,6 +1,6 @@
 {
-  "name": "G & M Plan",
-  "short_name": "G&M",
+  "name": "G & M",
+  "short_name": "G & M",
   "description": "Your personal gym and meal tracking companion",
   "start_url": "/",
   "display": "standalone",

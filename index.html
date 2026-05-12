@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
   <!-- PWA / Add to Home Screen -->
-  <title>G &amp; M Plan</title>
-  <meta name="application-name" content="G &amp; M Plan" />
+  <title>G &amp; M</title>
+  <meta name="application-name" content="G &amp; M" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="G &amp; M Plan" />
+  <meta name="apple-mobile-web-app-title" content="G &amp; M" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#04080f" id="themeColorMeta" />
   <meta name="msapplication-TileColor" content="#04080f" />
@@ -1356,7 +1356,7 @@
         <div class="app-header-brand">
           <div class="app-header-logo" style="font-size:0.65rem;letter-spacing:0.02em;padding:2px">G&amp;M</div>
           <div class="app-header-info">
-            <div class="app-header-title">G &amp; M Plan</div>
+            <div class="app-header-title">G &amp; M</div>
             <div class="app-header-date" id="headerDate">Loading…</div>
           </div>
         </div>
@@ -3538,7 +3538,7 @@
       const day = week.find(d => d.id === todayId);
       if (!day) return;
       const dateStr = new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
-      let text = '💪 G&M Plan — '+dateStr+'\n';
+      let text = '💪 G&M — '+dateStr+'\n';
       text += '📋 '+day.label+'\n\n';
 
       // Workout section
@@ -3575,7 +3575,7 @@
 
       const preview=document.getElementById('shareWorkoutPreview');
       if (preview) { preview.textContent=text; preview.style.display='block'; }
-      if (navigator.share) navigator.share({title:'G&M Plan — '+dateStr,text}).catch(()=>{});
+      if (navigator.share) navigator.share({title:'G&M — '+dateStr,text}).catch(()=>{});
       else if (navigator.clipboard) navigator.clipboard.writeText(text).then(()=>{
         const btn=document.getElementById('shareWorkoutBtn');
         if(btn){btn.textContent='✓ Copied!';setTimeout(()=>{btn.textContent='📤 Share workout';},2000);}
@@ -4370,7 +4370,18 @@
               <div class="sre-row">
                 <div class="sre-field">
                   <span class="sre-label">Sets</span>
-                  <input class="sre-input" type="number" min="1" max="10" value="${activeSets}" data-field="sets" />
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <button class="sre-remove-set-btn" type="button"
+                      style="width:28px;height:28px;border-radius:var(--r-sm);border:1.5px solid var(--border);
+                      background:var(--surface-3);color:var(--text-2);font-size:1rem;font-weight:700;
+                      cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">−</button>
+                    <input class="sre-input" type="number" min="1" max="20" value="${activeSets}" data-field="sets"
+                      style="text-align:center;width:44px" />
+                    <button class="sre-add-set-btn" type="button"
+                      style="width:28px;height:28px;border-radius:var(--r-sm);border:1.5px solid var(--accent);
+                      background:var(--accent-dim);color:var(--accent);font-size:1rem;font-weight:700;
+                      cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">+</button>
+                  </div>
                 </div>
                 <div class="sre-field">
                   <span class="sre-label">Reps</span>
@@ -4468,46 +4479,140 @@
         const sreApply = block.querySelector(".sre-apply-btn");
         const sreSetsInput = block.querySelector('.sre-input[data-field="sets"]');
         const sreRepsInput = block.querySelector('.sre-input[data-field="reps"]');
-
         const sreKgInput = block.querySelector('.sre-input[data-field="kg"]');
 
-        function saveSRE(rebuild) {
-          const newSets = parseInt(sreSetsInput.value) || numSets;
-          const newReps = sreRepsInput.value.trim() || repInfo;
+        function saveSRE() {
+          const newSets = parseInt(sreSetsInput?.value) || numSets;
+          const newReps = sreRepsInput?.value.trim() || repInfo;
           state[setsKey] = newSets;
           state[repsKey] = newReps;
-          // Save kg as default weight for all sets of this exercise
+
           if (sreKgInput && sreKgInput.value.trim()) {
             const rawVal = sreKgInput.value.trim();
-            // Always store internally as kg
             const kgVal = getWeightUnit() === 'lbs' ? String(lbsToKg(parseFloat(rawVal))) : rawVal;
             state["exweight:" + item.title.toLowerCase()] = kgVal;
             state[weightKey(day.id, index)] = kgVal;
-            // Pre-fill all set data with this weight
             for (let ss = 0; ss < newSets; ss++) {
               const ssk = setDataKey(day.id, index, ss);
               if (!state[ssk]) state[ssk] = {};
-              if (!state[ssk].weight) state[ssk].weight = kgVal;
+              state[ssk].weight = kgVal;
             }
           }
+
+          // Push new reps to all undone sets
+          for (let ss = 0; ss < newSets; ss++) {
+            const ssk = setDataKey(day.id, index, ss);
+            if (!state[ssk]) state[ssk] = {};
+            if (!state[ssk].done) state[ssk].reps = newReps;
+          }
+
           saveState();
-          if (rebuild) renderDay();
+
+          // Rebuild ONLY the set rows inside this block — keep panel open
+          const setsList = block.querySelector('.sets-list');
+          if (setsList) {
+            let newHTML = '';
+            const wUnit = getWeightUnit();
+            for (let s = 0; s < newSets; s++) {
+              const sk = setDataKey(day.id, index, s);
+              const sd = state[sk] || {};
+              const done = !!sd.done;
+              const w = sd.weight !== undefined && sd.weight !== '' ? sd.weight : (state[weightKey(day.id, index)] || state["exweight:" + item.title.toLowerCase()] || '');
+              const r = sd.reps || newReps || repInfo;
+              const wDisplay = (w && wUnit === 'lbs') ? kgToLbs(parseFloat(w)) : w;
+              const doneLabel = sd.weight
+                ? `✓ ${wUnit==='lbs'?kgToLbs(parseFloat(sd.weight)):sd.weight}${wUnit}`
+                : '✓';
+              newHTML += `
+                <div class="set-row ${done?'done':''}" data-set="${s}">
+                  <div class="set-num" style="font-family:var(--font-mono);font-size:0.78rem;font-weight:700;color:var(--text-3);text-align:center;min-width:28px">S${s+1}</div>
+                  <div style="display:flex;gap:8px;flex:1;align-items:flex-end">
+                    <div style="display:flex;flex-direction:column;gap:3px;flex:1">
+                      <span style="font-size:0.6rem;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;text-align:center">${wUnit}</span>
+                      <input class="set-weight-input" type="number" min="0" max="500" step="${wUnit==='lbs'?'1':'0.5'}"
+                        placeholder="0" value="${wDisplay}" data-set="${s}" data-unit="${wUnit}"
+                        style="width:100%;padding:10px 6px;border-radius:var(--r-md);border:1.5px solid ${done?'rgba(52,211,153,0.3)':'var(--border)'};
+                        background:${done?'rgba(52,211,153,0.06)':'var(--surface-2)'};color:var(--text);font-family:var(--font-mono);
+                        font-size:1rem;font-weight:700;text-align:center;outline:none;box-sizing:border-box;transition:border-color 150ms,background 150ms;"/>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:3px;flex:1">
+                      <span style="font-size:0.6rem;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;text-align:center">reps</span>
+                      <input class="set-reps-input" type="text" inputmode="numeric"
+                        placeholder="${repInfo}" value="${r}" data-set="${s}"
+                        style="width:100%;padding:10px 6px;border-radius:var(--r-md);border:1.5px solid ${done?'rgba(52,211,153,0.3)':'var(--border)'};
+                        background:${done?'rgba(52,211,153,0.06)':'var(--surface-2)'};color:var(--text);font-family:var(--font-mono);
+                        font-size:1rem;font-weight:700;text-align:center;outline:none;box-sizing:border-box;transition:border-color 150ms,background 150ms;"/>
+                    </div>
+                  </div>
+                  <button class="set-log-btn ${done?'done':''}" data-set="${s}" type="button">
+                    ${done ? doneLabel : 'Done'}
+                  </button>
+                </div>`;
+            }
+            setsList.innerHTML = newHTML;
+
+            // Re-wire Done buttons on the new rows
+            setsList.querySelectorAll('.set-log-btn').forEach(btn => {
+              btn.addEventListener('click', () => {
+                const s = parseInt(btn.dataset.set);
+                const sk = setDataKey(day.id, index, s);
+                if (!state[sk]) state[sk] = {};
+                const wasDone = state[sk].done;
+                const wInp = block.querySelector(`.set-weight-input[data-set="${s}"]`);
+                const rInp = block.querySelector(`.set-reps-input[data-set="${s}"]`);
+                const rawW = wInp ? wInp.value.trim() : '';
+                const wUnit2 = getWeightUnit();
+                const storedW = rawW && wUnit2 === 'lbs' ? String(lbsToKg(parseFloat(rawW))) : rawW;
+                const storedR = rInp ? rInp.value.trim() : '';
+                if (wasDone) {
+                  state[sk].done = false;
+                } else {
+                  state[sk].done = true;
+                  if (storedW) state[sk].weight = storedW;
+                  if (storedR) state[sk].reps   = storedR;
+                  if (storedW) { state["exweight:" + item.title.toLowerCase()] = storedW; checkAndSetPR(item.title, parseFloat(storedW)); }
+                }
+                saveState();
+                // Refresh just this row's appearance
+                const row = btn.closest('.set-row');
+                if (row) {
+                  const nowDone = !!state[sk].done;
+                  row.classList.toggle('done', nowDone);
+                  btn.classList.toggle('done', nowDone);
+                  btn.textContent = nowDone ? (storedW ? `✓ ${rawW}${wUnit2}` : '✓') : 'Done';
+                  [wInp, rInp].forEach(inp => { if(inp) { inp.style.borderColor = nowDone?'rgba(52,211,153,0.3)':''; inp.style.background = nowDone?'rgba(52,211,153,0.06)':''; }});
+                }
+                checkAndAutoCompleteDay(day);
+              });
+            });
+          }
+
+          // Flash Apply button green
+          if (sreApply) {
+            sreApply.textContent = '✓ Applied!';
+            sreApply.style.background = 'var(--green)';
+            sreApply.style.borderColor = 'var(--green)';
+            setTimeout(() => {
+              sreApply.textContent = '✓ Apply';
+              sreApply.style.background = '';
+              sreApply.style.borderColor = '';
+            }, 1200);
+          }
         }
 
-        if (sreApply) sreApply.addEventListener("click", () => saveSRE(false));
-        if (sreSetsInput) {
-          sreSetsInput.addEventListener("change", () => saveSRE(false));
-        }
-        if (sreRepsInput) {
-          sreRepsInput.addEventListener("change", () => saveSRE(false));
-          sreRepsInput.addEventListener("blur",   () => saveSRE(false));
-        }
-        if (sreKgInput) {
-          sreKgInput.addEventListener("change", () => saveSRE(false));
-          sreKgInput.addEventListener("blur",   () => saveSRE(false));
-        }
+        if (sreApply) sreApply.addEventListener("click", saveSRE);
 
-        // (Per-set weight/reps handled via SRE fields + log button)
+        // ── + / - only change the displayed number, no save/rebuild ──
+        block.querySelector('.sre-add-set-btn')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const cur = parseInt(sreSetsInput?.value) || numSets;
+          if (sreSetsInput) sreSetsInput.value = Math.min(cur + 1, 20);
+        });
+        block.querySelector('.sre-remove-set-btn')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const cur = parseInt(sreSetsInput?.value) || numSets;
+          if (sreSetsInput && cur > 1) sreSetsInput.value = cur - 1;
+        });
 
         // Set done button — reads per-set weight and reps inputs
         block.querySelectorAll(".set-log-btn").forEach(btn => {
